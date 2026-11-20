@@ -16,6 +16,13 @@ output folder through Vera. The project ID and the methodology stay Michael's de
 - **Suggested project summary.** Customer, scope, deliverables, key dates, commercial terms,
   assumptions, dependencies and named people, each marked "stated" (the model's quote was found in
   the document) or "inferred" (it was not). For Michael to confirm in Vera.
+- **Scope-risk review.** Reads the SOW for ambiguity, missing acceptance criteria, hidden complexity,
+  scope boundary problems, risky assumptions and commercial or timeline statements that look wrong.
+  Code finds what it can and the model proposes the rest; every finding quotes the SOW and the quote
+  is checked against the document, or the finding is set aside. Stated findings and inferred ones are
+  kept apart, and only stated high-severity findings can move the verdict.
+- **Handoff file.** `indy_handoff.json` (schema 1.0, validated) next to the report, for Project
+  Initiation. See [docs/handoff_schema.md](docs/handoff_schema.md). Renaming it would break the next agent.
 - **Suggested methodology.** Waterfall or scrum with reasoning, clearly a suggestion only.
 - **Questions.** Ask about the documents; answers cite the passage they came from, and an answer
   that cites nothing is flagged as unverified.
@@ -50,7 +57,7 @@ routes. Everything else needs a Vera single sign-in session (token in localStora
 | `POST /v1/check` | start a readiness check for `{opportunity_id}`; returns a job id |
 | `GET /v1/jobs`, `GET /v1/jobs/{id}` | poll jobs; nothing holds a request open |
 | `GET /v1/runs/{opportunity_id}` | the latest run (checks, facts, report text) |
-| `/ui/api/*` | what the page uses: opportunities, checklist, ask, downloads |
+| `/ui/api/*` | what the page uses: opportunities, checklist, gap rules, ask, downloads (report, Word, handoff) |
 
 ## Rules it follows
 

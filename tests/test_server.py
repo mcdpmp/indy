@@ -15,7 +15,7 @@ def _client(cfg, vera=None):
 def test_health_matches_the_worker_contract(cfg):
     c, _ = _client(cfg)
     body = c.get("/health").json()
-    assert body == {"status": "ok", "agent": "indy", "version": "0.1.0", "busy": False}
+    assert body == {"status": "ok", "agent": "indy", "version": "0.2.0", "busy": False}
 
 
 def test_health_is_open_even_when_vera_is_down(cfg):
