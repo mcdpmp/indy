@@ -12,7 +12,7 @@
 
 from datetime import UTC, datetime
 
-from . import extract, report, state
+from . import extract, handoff, report, state
 from . import findings as findings_mod
 from .checklist import ChecklistStore
 from .documents import load_opportunity
@@ -73,9 +73,14 @@ def run_readiness(vera: VeraClient, llm: LLM, cfg: dict, params: dict, ctx: JobC
     except LLMError as exc:
         problems.append(f"follow-up questions: {exc}")
 
-    ctx.progress("Writing the report")
+    ctx.progress("Writing the report and the handoff file")
     markdown = report.render(opportunity, check, facts, methodology, inferred, problems, found)
-    # one report per run; Vera never overwrites, a repeat becomes readiness_report__v2.md and so on
+    package = handoff.build(
+        oid, opportunity, check, loaded, facts, methodology, inferred, found, problems
+    )  # validated here, so a bug fails the job before anything is stored
+    # Handoff first: Project Initiation depends on it. Vera never overwrites, so a repeat becomes
+    # indy_handoff__v2.json and readiness_report__v2.md; the newest version is the one to read.
+    stored_handoff = vera.put_opportunity_output(oid, handoff.FILE_NAME, handoff.to_bytes(package))
     stored = vera.put_opportunity_output(oid, "readiness_report.md", markdown.encode())
     run = {
         "opportunity_id": oid,
@@ -89,8 +94,11 @@ def run_readiness(vera: VeraClient, llm: LLM, cfg: dict, params: dict, ctx: JobC
         "findings": found,
         "model_problems": problems,
         "report_markdown": markdown,
+        "handoff": package,
         "stored": stored,
+        "stored_handoff": stored_handoff,
         "finished_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     state.save_run(cfg, oid, run)
-    return {k: run[k] for k in ("verdict", "model_problems", "stored", "finished_at")}
+    keys = ("verdict", "model_problems", "stored", "stored_handoff", "finished_at")
+    return {k: run[k] for k in keys}

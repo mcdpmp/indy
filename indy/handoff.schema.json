@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "indy_handoff_1.0",
+  "title": "Indy handoff for Project Initiation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "schema_version", "generated_at", "indy_version", "how_to_read", "opportunity",
+    "verdict", "checklist_verdict", "verdict_reasons", "checklist", "documents", "findings",
+    "project_summary", "methodology_suggestion", "inferred_followups", "model_problems"
+  ],
+  "properties": {
+    "schema": { "const": "indy_handoff" },
+    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "indy_version": { "type": "string" },
+    "how_to_read": { "type": "string" },
+    "opportunity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": { "id": { "type": "string" }, "name": { "type": "string" } }
+    },
+    "verdict": { "$ref": "#/$defs/verdict" },
+    "checklist_verdict": { "$ref": "#/$defs/verdict" },
+    "verdict_reasons": { "type": "array", "items": { "type": "string", "pattern": "^F-[0-9a-f]{6}$" } },
+    "checklist": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "kind", "status", "detail", "basis"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "kind": { "enum": ["blocker", "warning"] },
+          "status": { "enum": ["present", "partial", "missing", "unclear", "skipped"] },
+          "detail": { "type": "string" },
+          "basis": { "enum": ["stated", "computed"] }
+        }
+      }
+    },
+    "documents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signed_sow", "considered", "not_read"],
+      "properties": {
+        "signed_sow": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["doc_id", "filename", "signature_state"],
+              "properties": {
+                "doc_id": { "type": "string" },
+                "filename": { "type": "string" },
+                "signature_state": { "enum": ["signed", "partly", "unsigned", "no_block"] }
+              }
+            }
+          ]
+        },
+        "considered": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["doc_id", "filename", "category", "role"],
+            "properties": {
+              "doc_id": { "type": "string" },
+              "filename": { "type": "string" },
+              "category": { "type": "string" },
+              "role": { "enum": ["sow", "rfp", "supporting", "scoper_output"] }
+            }
+          }
+        },
+        "not_read": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["filename", "category", "reason"],
+            "properties": {
+              "filename": { "type": "string" },
+              "category": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+    "project_summary": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "customer", "scope", "deliverables", "key_dates", "commercial_terms", "assumptions",
+            "dependencies", "people"
+          ],
+          "properties": {
+            "customer": { "$ref": "#/$defs/facts" },
+            "scope": { "$ref": "#/$defs/facts" },
+            "deliverables": { "$ref": "#/$defs/facts" },
+            "key_dates": { "$ref": "#/$defs/facts" },
+            "commercial_terms": { "$ref": "#/$defs/facts" },
+            "assumptions": { "$ref": "#/$defs/facts" },
+            "dependencies": { "$ref": "#/$defs/facts" },
+            "people": { "$ref": "#/$defs/facts" }
+          }
+        }
+      ]
+    },
+    "methodology_suggestion": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["suggestion", "reasoning", "signals", "note"],
+          "properties": {
+            "suggestion": { "enum": ["waterfall", "scrum", null] },
+            "reasoning": { "type": "string" },
+            "signals": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["scrum_terms", "waterfall_terms"],
+              "properties": {
+                "scrum_terms": { "type": "integer", "minimum": 0 },
+                "waterfall_terms": { "type": "integer", "minimum": 0 }
+              }
+            },
+            "note": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "inferred_followups": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["customer_questions", "delivery_questions", "risks", "later_agents_need"],
+          "properties": {
+            "customer_questions": { "$ref": "#/$defs/strings" },
+            "delivery_questions": { "$ref": "#/$defs/strings" },
+            "risks": { "$ref": "#/$defs/strings" },
+            "later_agents_need": { "$ref": "#/$defs/strings" }
+          }
+        }
+      ]
+    },
+    "model_problems": { "$ref": "#/$defs/strings" }
+  },
+  "$defs": {
+    "verdict": { "enum": ["ready", "ready_with_conditions", "not_ready"] },
+    "strings": { "type": "array", "items": { "type": "string" } },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "basis", "quote", "document"],
+        "properties": {
+          "text": { "type": "string" },
+          "basis": { "enum": ["stated", "inferred"] },
+          "quote": { "type": "string" },
+          "document": { "type": "string" }
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "category", "severity", "basis", "title", "quote", "source_document", "where", "why",
+        "question", "asked_of", "destination", "origin", "evidence_kind"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^F-[0-9a-f]{6}$" },
+        "category": {
+          "enum": [
+            "ambiguity", "acceptance", "complexity", "scope_boundary", "assumptions_dependencies",
+            "commercial_timeline"
+          ]
+        },
+        "severity": { "enum": ["high", "medium", "low"] },
+        "basis": { "enum": ["stated", "inferred"] },
+        "title": { "type": "string", "minLength": 1 },
+        "quote": { "type": "string", "minLength": 8 },
+        "source_document": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["doc_id", "filename"],
+          "properties": { "doc_id": { "type": "string" }, "filename": { "type": "string" } }
+        },
+        "where": { "type": "string" },
+        "why": { "type": "string" },
+        "question": { "type": "string" },
+        "asked_of": { "enum": ["customer", "sales", "delivery"] },
+        "destination": { "enum": ["starting_risk", "starting_issue", "open_question"] },
+        "origin": { "enum": ["code", "model"] },
+        "evidence_kind": { "enum": ["text", "absence"] }
+      }
+    }
+  }
+}

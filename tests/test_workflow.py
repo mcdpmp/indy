@@ -33,7 +33,7 @@ def test_full_run_stores_the_report_through_vera_and_caches_the_run(cfg):
     vera = _vera()
     c, job = _run(cfg, vera)
     assert job["status"] == "done" and job["result"]["verdict"] == "ready"
-    assert list(vera.outputs) == ["readiness_report.md"]
+    assert list(vera.outputs) == ["indy_handoff.json", "readiness_report.md"]
     assert job["result"]["stored"]["storage_ref"].endswith("/outputs/indy/readiness_report.md")
     md = vera.outputs["readiness_report.md"].decode()
     assert md.index("## Executive summary") < md.index("## Checklist")
