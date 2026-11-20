@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script>
+  // Tailscale strips the /indy prefix, so without a trailing slash relative URLs would
+  // resolve against the host root. Setting <base> here fixes that for every relative URL.
+  (function () {
+    var p = location.pathname;
+    document.write('<base href="' + (p.endsWith('/') ? p : p + '/') + '">');
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Indy</title>
+</head>
+<body><p>Indy project intake. The page arrives in a later milestone.</p></body>
+</html>

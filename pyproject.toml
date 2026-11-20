@@ -1,0 +1,12 @@
+[project]
+name = "indy"
+version = "0.1.0"
+description = "Project intake: checks whether a signed deal is ready to become a project. A Vera worker on port 5112."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100

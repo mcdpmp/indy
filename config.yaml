@@ -1,0 +1,18 @@
+# Indy configuration. No credentials live here: the Vera key comes from VERA_AGENT_KEY.
+# Every value has a default in indy/config.py; set only what you want to change.
+
+llm:
+  ollama_endpoint: "http://host.docker.internal:11434"   # INDY_OLLAMA_ENDPOINT overrides
+  extraction_model: "llama3.1:8b"   # reads documents, extracts facts (JSON)
+  generation_model: "qwen3:14b"     # prose: summaries and answers
+  timeout_seconds: 240
+  num_ctx: 8192
+  keep_alive: "2m"   # let Ollama unload soon after the last call so other agents get the GPU
+  think: false
+  pause_seconds: 5   # pause after each model call, so other agents can share the same Ollama
+
+vera:
+  sow_category: sow
+  rfp_category: rfp
+  other_category: other
+  scoper_agent: scoper   # whose outputs Indy may read (needs Vera's can_read_outputs_of)
