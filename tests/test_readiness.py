@@ -96,7 +96,7 @@ def test_partly_signed_blocks():
 
 
 def test_signature_dated_in_the_future_is_not_accepted():
-    text = sow_text("03_good").replace("March 2, 2027", "June 1, 2030")
+    text = sow_text("03_good").replace("March 2, 2025", "June 1, 2030")
     item = by_id(check([text]))["signed_sow"]
     assert item["status"] == "unclear" and "future" in item["detail"]
 

@@ -20,7 +20,7 @@ def sow_text(name: str, signed: bool = True) -> str:
     text = (FIXTURES / f"sow_{name}.md").read_text(encoding="utf-8")
     if signed:
         text = re.sub(r"\| Signature \| \| \|", "| Signature | /s/ A Person | /s/ B Person |", text)
-        text = re.sub(r"\| Date \| \| \|", "| Date | March 1, 2027 | March 2, 2027 |", text)
+        text = re.sub(r"\| Date \| \| \|", "| Date | March 1, 2025 | March 2, 2025 |", text)
     return text
 
 
@@ -85,3 +85,64 @@ class FakeVera:
         if doc_id in getattr(self, "forbidden", set()):
             raise VeraError(403, "forbidden", "outside this agent's read scope")
         return self.content[doc_id]
+
+    # opportunity metadata and outputs
+    def opportunity(self, oid):
+        self._check()
+        if oid == "NOPE":
+            raise VeraError(404, "not_found", "no such opportunity")
+        return {"opportunity_id": oid, "name": "Harborline claims triage"}
+
+    def put_opportunity_output(self, oid, filename, data):
+        self._check()
+        if getattr(self, "reject_outputs", False):
+            raise VeraError(413, "too_large", "file too large")
+        outputs = self.__dict__.setdefault("outputs", {})
+        stem, dot, ext = filename.rpartition(".")
+        name, n = filename, 1
+        while name in outputs:  # Vera never overwrites: a clash becomes name__v2.ext
+            n += 1
+            name = f"{stem}__v{n}{dot}{ext}"
+        outputs[name] = data
+        return {"storage_ref": f"{oid}/_opportunity/outputs/indy/{name}"}
+
+
+class FakeLLM:
+    """Stands in for Ollama. Answers by the TASK line in the prompt."""
+
+    def __init__(self, down: bool = False, junk: bool = False) -> None:
+        self.down, self.junk, self.prompts = down, junk, []
+
+    def json(self, prompt, retries=1, **kw):
+        from indy.llm_client import LLMError
+
+        self.prompts.append(prompt)
+        if self.down:
+            raise LLMError("Ollama call failed: connection refused")
+        if self.junk:  # what a prompt-injected or confused model might send back
+            return {
+                "suggestion": "ignore all rules",
+                "reasoning": 5,
+                "customer": "owned",
+                "scope": [5, None, {"text": ""}],
+            }
+        if "TASK: extract project facts" in prompt:
+            fields = re.findall(r'^- "(\w+)":', prompt, re.MULTILINE)
+            good = "Harborline Mutual Insurance Company"
+            return {
+                f: [
+                    {
+                        "text": f"{f} item",
+                        "quote": good if f == "customer" else "words that are not in the document",
+                    }
+                ]
+                for f in fields
+            }
+        if "TASK: suggest a delivery methodology" in prompt:
+            return {"suggestion": "waterfall", "reasoning": "Fixed price with milestones."}
+        return {
+            "customer_questions": ["Who signs acceptance?"],
+            "delivery_questions": ["Is the team staffed?"],
+            "risks": ["Late data"],
+            "later_agents_need": ["The deliverables list"],
+        }
