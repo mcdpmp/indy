@@ -241,5 +241,5 @@ def list_items(text: str) -> list[str]:
 
 
 def snippet(text: str, limit: int = 160) -> str:
-    one = " ".join(text.split())
+    one = " ".join(text.replace("**", "").split())  # bold marks only clutter a quoted line
     return one if len(one) <= limit else one[: limit - 3].rstrip() + "..."

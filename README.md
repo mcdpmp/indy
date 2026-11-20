@@ -6,8 +6,8 @@ to become a project, and if not, what is missing? It is a worker under the Vera 
 port 5112. It never creates projects, never changes methodology, and writes only to its own
 output folder through Vera.
 
-Status: milestones 1 to 3 (skeleton, single sign-in, jobs, the code-only readiness engine,
-model stages and the Markdown report; POST /v1/check starts a run). The page, Q&A and Word export follow.
+Status: milestones 1 to 4 (skeleton, single sign-in, jobs, the code-only readiness engine,
+model stages, the Markdown report, the web page and cited Q&A). The Word export and Vera docs follow.
 
 ## Run
 

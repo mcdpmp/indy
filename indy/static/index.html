@@ -3,15 +3,55 @@
 <head>
 <meta charset="utf-8">
 <script>
-  // Tailscale strips the /indy prefix, so without a trailing slash relative URLs would
-  // resolve against the host root. Setting <base> here fixes that for every relative URL.
-  (function () {
-    var p = location.pathname;
-    document.write('<base href="' + (p.endsWith('/') ? p : p + '/') + '">');
-  })();
+/* Set <base> before anything relative is parsed. Under a Tailscale path mount (/indy) the
+   prefix is stripped before the request reaches us, so we cannot redirect; without the trailing
+   slash "static/app.js" would resolve to the host root. This page is always the app root. */
+(function () {
+  var p = location.pathname;
+  if (p.charAt(p.length - 1) !== '/') p += '/';
+  var b = document.createElement('base');
+  b.href = p;
+  document.head.appendChild(b);
+})();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Indy</title>
+<link rel="icon" type="image/svg+xml" href="static/icon.svg">
+<link rel="stylesheet" href="static/style.css">
+<link rel="manifest" href="static/manifest.json">
+<meta name="theme-color" content="#1d4ed8">
 </head>
-<body><p>Indy project intake. The page arrives in a later milestone.</p></body>
+<body>
+
+<header>
+  <a class="brand" href="#/">
+    <div class="mark"><img src="static/icon.svg" alt="" width="42" height="42"></div>
+    <div>
+      <h1>Indy</h1>
+      <div class="subtitle">Project intake: is this deal ready?</div>
+    </div>
+  </a>
+  <div class="header-right"><span id="runStatus"></span></div>
+</header>
+
+<nav class="tabs" aria-label="Main" id="mainNav"></nav>
+
+<main id="view" tabindex="-1"></main>
+
+<div class="overlay" id="pinOverlay">
+  <div class="modal" style="max-width:360px" role="dialog" aria-labelledby="pin-title">
+    <form id="pin-form" autocomplete="off">
+      <h2 id="pin-title" style="margin-top:0">Enter PIN</h2>
+      <p class="muted small">Indy holds signed contracts, so it asks for the VeraForge PIN. It is the same PIN as Vera, Pinny and Scoper.</p>
+      <label>PIN <input id="pin-input" type="password" autocomplete="off" required></label>
+      <p id="pin-error" role="alert" style="color:var(--red);min-height:1.2em;font-size:.85rem"></p>
+      <button type="submit" class="action">Unlock</button>
+    </form>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script src="static/app.js"></script>
+</body>
 </html>

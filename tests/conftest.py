@@ -107,11 +107,30 @@ class FakeVera:
         return {"storage_ref": f"{oid}/_opportunity/outputs/indy/{name}"}
 
 
+def _list_opportunities(self):
+    self._check()
+    if getattr(self, "opportunities", None) is None:
+        raise VeraError(403, "forbidden", "this agent does not hold the list_projects grant")
+    return self.opportunities
+
+
+FakeVera.list_opportunities = _list_opportunities
+
+
 class FakeLLM:
     """Stands in for Ollama. Answers by the TASK line in the prompt."""
 
     def __init__(self, down: bool = False, junk: bool = False) -> None:
         self.down, self.junk, self.prompts = down, junk, []
+        self.answer = "The Client Sponsor accepts deliverables [1]."
+
+    def text(self, prompt, **kw):
+        from indy.llm_client import LLMError
+
+        self.prompts.append(prompt)
+        if self.down:
+            raise LLMError("Ollama call failed: connection refused")
+        return self.answer
 
     def json(self, prompt, retries=1, **kw):
         from indy.llm_client import LLMError

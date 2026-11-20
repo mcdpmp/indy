@@ -38,7 +38,7 @@ def test_full_run_stores_the_report_through_vera_and_caches_the_run(cfg):
     md = vera.outputs["readiness_report.md"].decode()
     assert md.index("## Executive summary") < md.index("## Checklist")
     assert "Verdict: Ready." in md and "Harborline claims triage" in md
-    assert "—" not in md
+    assert chr(0x2014) not in md
     run = c.get("/v1/runs/OPP-1", headers=H).json()
     assert run["verdict"] == "ready" and run["report_markdown"] == md
 

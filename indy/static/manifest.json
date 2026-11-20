@@ -1,0 +1,13 @@
+{
+  "name": "Indy - project intake readiness",
+  "short_name": "Indy",
+  "start_url": "../",
+  "scope": "../",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "_comment": "start_url and scope are relative on purpose: they resolve against this file's URL (one level below the app root), so a mount at /indy/ yields scope /indy/ under a Tailscale path mount."
+}

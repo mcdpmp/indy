@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from . import state, ui_auth, workflows
 from .jobs import JobStore
 from .llm_client import LLM
+from .ui import build_router
 from .vera_client import VeraClient
 from .version import AGENT, VERSION
 
@@ -130,11 +131,8 @@ def create_app(
         auth.logout(x_admin_token)
         return {"ok": True}
 
-    @ui.get("/status", dependencies=needs_pin)
-    def status() -> dict:
-        return {"agent": AGENT, "version": VERSION, "busy": store.busy()}
-
     app.include_router(ui)
+    app.include_router(build_router(cfg, store, vera_factory, model, auth, start_check))
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     @app.get("/", include_in_schema=False)
