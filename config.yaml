@@ -16,3 +16,8 @@ vera:
   rfp_category: rfp
   other_category: other
   scoper_agent: scoper   # whose outputs Indy may read (needs Vera's can_read_outputs_of)
+
+readiness:
+  partial_min_share: 0.5   # share of deliverables with acceptance criteria below which the item counts as missing
+  min_assumptions: 5       # fewer assumptions than this is a partial result
+  min_section_words: 40    # a section shorter than this is too thin to count as covering a topic

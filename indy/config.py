@@ -28,6 +28,13 @@ DEFAULTS: dict = {
         "other_category": "other",
         "scoper_agent": "scoper",
     },
+    "readiness": {
+        # a deliverables table counts as "partly covered" from this share of rows filled in;
+        # below it the item is treated as missing
+        "partial_min_share": 0.5,
+        "min_assumptions": 5,
+        "min_section_words": 40,
+    },
     "paths": {"state_dir": "./state"},
 }
 
@@ -48,6 +55,12 @@ def validate(cfg: dict) -> None:
     for key in ("timeout_seconds", "num_ctx"):
         if not isinstance(llm[key], int | float) or llm[key] < 1:
             raise ValueError(f"llm.{key} must be at least 1")
+    r = cfg["readiness"]
+    if not 0 < r["partial_min_share"] <= 1:
+        raise ValueError("readiness.partial_min_share must be above 0 and at most 1")
+    for key in ("min_assumptions", "min_section_words"):
+        if not isinstance(r[key], int) or r[key] < 1:
+            raise ValueError(f"readiness.{key} must be a whole number of at least 1")
     if not isinstance(llm["pause_seconds"], int | float) or llm["pause_seconds"] < 0:
         raise ValueError("llm.pause_seconds must be zero or more")
 
