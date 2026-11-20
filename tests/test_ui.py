@@ -293,3 +293,38 @@ def test_no_long_dashes_in_the_page_or_report_text():
 def test_bad_ids_are_refused_on_the_run_routes(cfg, oid):
     c, _ = _client(cfg)
     assert c.get(f"/ui/api/run/{oid}".replace("/", "%2F", 3), headers=H).status_code in (400, 404)
+
+
+def test_word_report_matches_the_run_and_needs_a_session(cfg):
+    import io
+
+    import docx
+
+    c, _ = _client(cfg, _with_sow())
+    assert c.get("/ui/api/run/OPP-1/report.docx").status_code == 401
+    assert c.get("/ui/api/run/OPP-1/report.docx", headers=H).status_code == 404
+    job = c.post("/ui/api/check", json={"opportunity_id": "OPP-1"}, headers=H).json()
+    _wait(c, job["job_id"])
+    r = c.get("/ui/api/run/OPP-1/report.docx", headers=H)
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    d = docx.Document(io.BytesIO(r.content))
+    assert d.paragraphs[0].text.startswith("Project intake readiness")
+    run = c.get("/ui/api/run/OPP-1", headers=H).json()
+    assert len(d.tables[0].rows) == len(run["check"]["items"]) + 1
+    text = "\n".join(p.text for p in d.paragraphs)
+    assert "Verdict: Ready." in text and "(suggestion only)" in text and chr(0x2014) not in text
+
+
+def test_word_report_for_an_unsigned_sow_lists_the_blocker_and_a_missing_model(cfg):
+    import io
+
+    import docx
+
+    vera = FakeVera()
+    vera.add("d", "sow.md", "sow", sow_text("08_poor", signed=False).encode())
+    c, _ = _client(cfg, vera, FakeLLM(down=True))
+    job = c.post("/ui/api/check", json={"opportunity_id": "OPP-1"}, headers=H).json()
+    _wait(c, job["job_id"])
+    d = docx.Document(io.BytesIO(c.get("/ui/api/run/OPP-1/report.docx", headers=H).content))
+    text = "\n".join(p.text for p in d.paragraphs)
+    assert "Verdict: Not ready." in text and "Blockers (" in text and "did not fully run" in text

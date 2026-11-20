@@ -159,6 +159,7 @@ function reportHtml(run) {
       ${conditions.length ? `<p><b>Conditions (${conditions.length}):</b> ${conditions.map((b) => `${esc(b.label)} ${pill(b.status)}`).join(' ')}</p>` : ''}
       ${!blockers.length && !conditions.length ? '<p>Every enabled checklist item is present.</p>' : ''}
       <div class="row"><button class="action secondary small" id="dlReport">Download report (.md)</button>
+      <button class="action secondary small" id="dlWord">Download Word</button>
       <span class="muted small">Stored in Vera as ${esc((run.stored || {}).storage_ref || 'the opportunity outputs')}</span></div></div>
     <div class="card"><h2>Checklist</h2><div class="tablewrap"><table>
       <thead><tr><th>Item</th><th>Kind</th><th>Status</th><th>What the documents show</th></tr></thead><tbody>
@@ -198,8 +199,12 @@ async function opportunity(oid) {
       <div class="row" style="margin-top:8px"><button class="action" type="submit" id="askBtn">Ask</button>
       <span class="muted small">Answers cite the document they came from.</span></div></form>
       <div id="answers"></div></div>`;
-  const dl = $('#dlReport');
-  if (dl) dl.onclick = () => download('run/' + enc(oid) + '/report.md', 'readiness_report_' + oid + '.md');
+  const wireDownloads = () => {
+    const md = $('#dlReport'), wd = $('#dlWord');
+    if (md) md.onclick = () => download('run/' + enc(oid) + '/report.md', 'readiness_report_' + oid + '.md');
+    if (wd) wd.onclick = () => download('run/' + enc(oid) + '/report.docx', 'readiness_report_' + oid + '.docx');
+  };
+  wireDownloads();
 
   $('#runBtn').onclick = async () => {
     const btn = $('#runBtn'), msg = $('#runMsg');
@@ -211,8 +216,7 @@ async function opportunity(oid) {
       msg.innerHTML = '';
       const run = await api('run/' + enc(oid));
       $('#report').innerHTML = reportHtml(run);
-      const dl2 = $('#dlReport');
-      if (dl2) dl2.onclick = () => download('run/' + enc(oid) + '/report.md', 'readiness_report_' + oid + '.md');
+      wireDownloads();
       toast('Check finished');
     } catch (e) {
       msg.innerHTML = `<div class="banner bad">${esc(e.message)}</div>`;

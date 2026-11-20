@@ -5,12 +5,13 @@ the sign-in routes live in server.py. Long work (a check, a question) returns a 
 from collections.abc import Callable
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 
 from . import qa, state, workflows
 from .checklist import ChecklistError, ChecklistStore
 from .documents import load_opportunity
+from .docx_export import render_docx
 from .jobs import JobStore
 from .llm_client import LLM
 from .ui_auth import UiAuth
@@ -164,6 +165,19 @@ def build_router(
             media_type="text/markdown",
             headers={
                 "Content-Disposition": f'attachment; filename="readiness_report_{opportunity_id}.md"'
+            },
+        )
+
+    @router.get("/run/{opportunity_id}/report.docx")
+    def report_docx(opportunity_id: str) -> Response:
+        found = state.load_run(cfg, _oid(opportunity_id))
+        if found is None:
+            raise HTTPException(404, "No check has been run for this opportunity yet.")
+        return Response(
+            render_docx(found),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={
+                "Content-Disposition": f'attachment; filename="readiness_report_{opportunity_id}.docx"'
             },
         )
 
