@@ -35,6 +35,39 @@ def _table(d: docx.document.Document, header: list[str], rows: list[list[str]]) 
             cells[i].text = v
 
 
+def _findings(d: docx.document.Document, findings: dict | None) -> None:
+    """Stated and inferred findings in separate tables, with the quote under each table."""
+    if not findings:
+        return
+    d.add_heading("Risks and gaps for project initiation", level=1)
+    d.add_paragraph(
+        "Each finding quotes the document and the quote was checked against it. These become the "
+        "starting risks, issues and open questions for Project Initiation."
+    )
+    for basis, title in (
+        ("stated", "Stated in the documents"),
+        ("inferred", "Inferred by Indy (reading between the lines, no effect on the verdict)"),
+    ):
+        d.add_heading(title, level=2)
+        rows = [f for f in findings["items"] if f["basis"] == basis]
+        if not rows:
+            d.add_paragraph("None.")
+            continue
+        _table(
+            d,
+            ["Id", "Severity", "Category", "Finding", "Ask", "Goes to"],
+            [
+                [f["id"], f["severity"], f["category"], f["title"], f["asked_of"], f["destination"]]
+                for f in rows
+            ],
+        )
+        for f in rows:
+            p = d.add_paragraph()
+            p.add_run(f"{f['id']} ").bold = True
+            p.add_run(f'{f["why"]} Quote ({f["doc"]}, {f["where"]}): "{f["quote"]}" ')
+            p.add_run(f"Question for the {f['asked_of']}: {f['question']}")
+
+
 def render_docx(run: dict, opportunity_name: str = "") -> bytes:
     check = run["check"]
     d = docx.Document()
@@ -50,6 +83,11 @@ def render_docx(run: dict, opportunity_name: str = "") -> bytes:
         f"Checked on {check['checked_on']} by Indy {VERSION}. The verdict and every status are "
         "computed in code from the documents. Indy does not create projects or choose a methodology."
     )
+    if check.get("verdict_reasons"):
+        d.add_paragraph(
+            f"Stated findings moved the verdict from {VERDICT_TEXT[check['checklist_verdict']]} "
+            f"to {VERDICT_TEXT[run['verdict']]}: " + ", ".join(check["verdict_reasons"]) + "."
+        )
     if run["model_problems"]:
         d.add_paragraph("The model stages did not fully run: " + "; ".join(run["model_problems"]))
 
@@ -81,6 +119,7 @@ def render_docx(run: dict, opportunity_name: str = "") -> bytes:
             for i in items
         ],
     )
+    _findings(d, run.get("findings"))
     docs = check["documents"]
     d.add_heading("Documents", level=1)
     d.add_paragraph("Read: " + (", ".join(x["filename"] for x in docs["read"]) or "none"))

@@ -328,3 +328,131 @@ def test_word_report_for_an_unsigned_sow_lists_the_blocker_and_a_missing_model(c
     d = docx.Document(io.BytesIO(c.get("/ui/api/run/OPP-1/report.docx", headers=H).content))
     text = "\n".join(p.text for p in d.paragraphs)
     assert "Verdict: Not ready." in text and "Blockers (" in text and "did not fully run" in text
+
+
+def _checked(cfg, name="06_middling", llm=None):
+    vera = FakeVera()
+    vera.add("d-sow", "signed_sow.md", "sow", sow_text(name).encode())
+    c, _ = _client(cfg, vera, llm)
+    job = c.post("/ui/api/check", json={"opportunity_id": "OPP-1"}, headers=H).json()
+    assert _wait(c, job["job_id"])["status"] == "done"
+    return c
+
+
+def test_gap_rule_routes_need_a_session_and_round_trip(cfg):
+    c, _ = _client(cfg)
+    assert c.get("/ui/api/finding-rules").status_code == 401
+    assert c.put("/ui/api/finding-rules", json={"items": []}).status_code == 401
+    assert c.post("/ui/api/finding-rules/reset").status_code == 401
+    rules = c.get("/ui/api/finding-rules", headers=H).json()
+    rules[0]["severity"] = "low"
+    rules.append(
+        {
+            "custom": True,
+            "label": "Offshore",
+            "category": "complexity",
+            "severity": "high",
+            "phrases": ["offshore team"],
+        }
+    )
+    saved = c.put("/ui/api/finding-rules", json={"items": rules}, headers=H)
+    assert saved.status_code == 200 and saved.json()[0]["severity"] == "low"
+    assert c.get("/ui/api/finding-rules", headers=H).json() == saved.json()
+    bad = c.put("/ui/api/finding-rules", json={"items": rules[:2]}, headers=H)
+    assert bad.status_code == 400 and "cannot be removed" in bad.json()["detail"]
+    assert c.get("/ui/api/finding-rules", headers=H).json() == saved.json()
+    assert c.post("/ui/api/finding-rules/reset", headers=H).json()[0]["severity"] == "medium"
+
+
+def test_a_changed_rule_changes_the_next_check(cfg):
+    c = _checked(cfg)
+    before = c.get("/ui/api/run/OPP-1", headers=H).json()["findings"]["items"]
+    assert any(f["rule"] == "unlimited_effort" for f in before)
+    rules = c.get("/ui/api/finding-rules", headers=H).json()
+    for r in rules:
+        if r["id"] == "unlimited_effort":
+            r["enabled"] = False
+    c.put("/ui/api/finding-rules", json={"items": rules}, headers=H)
+    job = c.post("/ui/api/check", json={"opportunity_id": "OPP-1"}, headers=H).json()
+    _wait(c, job["job_id"])
+    after = c.get("/ui/api/run/OPP-1", headers=H).json()["findings"]["items"]
+    assert not any(f["rule"] == "unlimited_effort" for f in after)
+
+
+def test_handoff_json_downloads_from_the_page_and_needs_a_session(cfg):
+    c = _checked(cfg)
+    assert c.get("/ui/api/run/OPP-1/handoff.json").status_code == 401
+    assert c.get("/ui/api/run/OPP-9/handoff.json", headers=H).status_code == 404
+    r = c.get("/ui/api/run/OPP-1/handoff.json", headers=H)
+    assert r.headers["content-disposition"] == 'attachment; filename="indy_handoff.json"'
+    assert r.json()["schema"] == "indy_handoff" and r.json()["findings"]
+
+
+def test_a_question_can_be_answered_from_and_cite_a_finding(cfg):
+    llm = FakeLLM()
+    c = _checked(cfg, llm=llm)
+    findings = c.get("/ui/api/run/OPP-1", headers=H).json()["findings"]["items"]
+    target = next(f for f in findings if f["rule"] == "unlimited_effort")
+    llm.answer = "The price covers unlimited revisions [1]."
+    job = c.post(
+        "/ui/api/ask",
+        json={"opportunity_id": "OPP-1", "question": "Are revisions limited in the price?"},
+        headers=H,
+    ).json()
+    out = _wait(c, job["job_id"])["result"]
+    assert out["grounded"]
+    prompt = llm.prompts[-1]
+    assert f"Finding {target['id']}" in prompt
+    cited = [s for s in out["sources"] if s["finding_id"]]
+    assert not cited or cited[0]["doc"].startswith("Finding F-")
+
+
+def test_findings_passages_are_chosen_by_overlap_and_carry_their_id():
+    from indy import qa
+
+    f = {
+        "id": "F-abc123",
+        "category": "acceptance",
+        "severity": "high",
+        "basis": "stated",
+        "title": "Subjective acceptance criterion",
+        "quote": "to the University's satisfaction",
+        "doc": "sow.md",
+        "why": "Cannot be tested.",
+        "asked_of": "customer",
+        "question": "What measurable result replaces it?",
+    }
+    top = qa.top_passages(
+        "what acceptance criterion is subjective", Loaded(), extra=qa.finding_chunks([f])
+    )
+    assert top[0]["finding_id"] == "F-abc123" and top[0]["doc"] == "Finding F-abc123"
+
+
+def test_word_report_has_the_findings_section_with_stated_and_inferred_apart(cfg):
+    import io
+
+    import docx
+
+    c = _checked(cfg)
+    d = docx.Document(io.BytesIO(c.get("/ui/api/run/OPP-1/report.docx", headers=H).content))
+    headings = [p.text for p in d.paragraphs if p.style.name.startswith("Heading")]
+    assert "Risks and gaps for project initiation" in headings
+    assert "Stated in the documents" in headings
+    assert any(h.startswith("Inferred by Indy") for h in headings)
+    findings = c.get("/ui/api/run/OPP-1", headers=H).json()["findings"]["items"]
+    stated = [f for f in findings if f["basis"] == "stated"]
+    assert any(len(t.rows) == len(stated) + 1 for t in d.tables)
+    assert findings[0]["quote"][:20] in "\n".join(p.text for p in d.paragraphs)
+
+
+def test_the_page_has_finding_filters_sort_rules_and_the_handoff_button():
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    for needle in (
+        "fSev",
+        "fBasis",
+        "fSort",
+        "finding-rules",
+        "handoff.json",
+        "Set aside, not passed on",
+    ):
+        assert needle in js, needle

@@ -84,31 +84,47 @@ def chunks(doc: Doc) -> list[dict]:
     return out
 
 
-def top_passages(question: str, loaded: Loaded, n: int = PASSAGES) -> list[dict]:
+def finding_chunks(findings: list[dict]) -> list[dict]:
+    """Findings as passages, so a question can be answered from them and cite them by id."""
+    return [
+        {
+            "doc": f"Finding {f['id']}",
+            "where": f"{f['category']}, {f['severity']}, {f['basis']}",
+            "finding_id": f["id"],
+            "text": (
+                f"{f['title']}. Quote from {f['doc']}: {f['quote']} Why it matters: {f['why']} "
+                f"Question for the {f['asked_of']}: {f['question']}"
+            ),
+        }
+        for f in findings
+    ]
+
+
+def top_passages(
+    question: str, loaded: Loaded, n: int = PASSAGES, extra: list[dict] | None = None
+) -> list[dict]:
     q = _terms(question)
     scored: list[tuple[int, int, dict]] = []
-    order = 0
-    for doc in loaded.everything():
-        for c in chunks(doc):
-            order += 1
-            hits = len(q & _terms(c["where"] + " " + c["text"]))
-            if hits:
-                scored.append((hits, -order, c))
+    pool = [c for doc in loaded.everything() for c in chunks(doc)] + list(extra or [])
+    for order, c in enumerate(pool, start=1):
+        hits = len(q & _terms(c["where"] + " " + c["text"]))
+        if hits:
+            scored.append((hits, -order, c))
     scored.sort(key=lambda t: (t[0], t[1]), reverse=True)
     return [c for _, _, c in scored[:n]]
 
 
-def answer(llm: LLM, loaded: Loaded, question: str) -> dict:
+def answer(llm: LLM, loaded: Loaded, question: str, findings: list[dict] | None = None) -> dict:
     question = question.strip()
     if not question or len(question) > MAX_QUESTION:
         raise ValueError(f"Ask a question of 1 to {MAX_QUESTION} characters.")
-    if not loaded.everything():
+    if not loaded.everything() and not findings:
         return {
             "answer": "No readable documents are filed for this opportunity, so there is nothing to answer from.",
             "sources": [],
             "grounded": False,
         }
-    passages = top_passages(question, loaded)
+    passages = top_passages(question, loaded, extra=finding_chunks(findings or []))
     if not passages:
         return {
             "answer": "The documents Indy can read do not mention this, so Indy cannot answer it.",
@@ -136,6 +152,7 @@ def answer(llm: LLM, loaded: Loaded, question: str) -> dict:
             "doc": passages[i - 1]["doc"],
             "where": passages[i - 1]["where"],
             "excerpt": " ".join(passages[i - 1]["text"].split())[:500],
+            "finding_id": passages[i - 1].get("finding_id"),
         }
         for i in used
     ]

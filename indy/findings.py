@@ -492,7 +492,8 @@ def propose(llm: LLM, doc: Doc, rfps: list[Doc], progress=lambda t: None) -> dic
             continue
         ok, bad = _clean_proposals(raw, doc, rfps)
         found += ok
-        unsupported += bad
+        # each group can return the same proposal; list a set-aside finding once
+        unsupported += [u for u in bad if u not in unsupported]
     return {"findings": found, "unsupported": unsupported, "problems": problems}
 
 

@@ -2,6 +2,7 @@
 the sign-in routes live in server.py. Long work (a check, a question) returns a job id.
 """
 
+import json
 from collections.abc import Callable
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +13,7 @@ from . import qa, state, workflows
 from .checklist import ChecklistError, ChecklistStore
 from .documents import load_opportunity
 from .docx_export import render_docx
+from .finding_rules import RuleError, RuleStore
 from .jobs import JobStore
 from .llm_client import LLM
 from .ui_auth import UiAuth
@@ -26,6 +28,10 @@ class AskIn(BaseModel):
 
 
 class ChecklistIn(BaseModel):
+    items: list[dict]
+
+
+class RulesIn(BaseModel):
     items: list[dict]
 
 
@@ -58,6 +64,7 @@ def build_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/ui/api", dependencies=[Depends(auth.require_pin)])
     checklist = ChecklistStore(cfg["paths"]["state_dir"])
+    rules = RuleStore(cfg["paths"]["state_dir"])
 
     @router.get("/opportunities")
     def opportunities() -> dict:
@@ -114,7 +121,9 @@ def build_router(
         def task() -> dict:
             try:
                 loaded = load_opportunity(vera_factory(), oid, cfg)
-                out = qa.answer(model, loaded, question)
+                run = state.load_run(cfg, oid)
+                kept = ((run or {}).get("findings") or {}).get("items", [])
+                out = qa.answer(model, loaded, question, kept)
             except (VeraUnavailable, VeraError) as exc:
                 raise workflows.explain(exc) from None
             state.audit(cfg, "ui", "ask", opportunity_id=oid, grounded=out["grounded"])
@@ -167,6 +176,35 @@ def build_router(
                 "Content-Disposition": f'attachment; filename="readiness_report_{opportunity_id}.md"'
             },
         )
+
+    @router.get("/run/{opportunity_id}/handoff.json")
+    def handoff_json(opportunity_id: str) -> Response:
+        found = state.load_run(cfg, _oid(opportunity_id))
+        if found is None or not found.get("handoff"):
+            raise HTTPException(404, "No check has been run for this opportunity yet.")
+        return Response(
+            json.dumps(found["handoff"], indent=2, ensure_ascii=False).encode("utf-8"),
+            media_type="application/json",
+            headers={"Content-Disposition": 'attachment; filename="indy_handoff.json"'},
+        )
+
+    @router.get("/finding-rules")
+    def get_rules() -> list[dict]:
+        return rules.load()
+
+    @router.put("/finding-rules")
+    def put_rules(body: RulesIn) -> list[dict]:
+        try:
+            saved = rules.save(body.items)
+        except RuleError as exc:
+            raise HTTPException(400, str(exc)) from None
+        state.audit(cfg, "ui", "finding_rules.save")
+        return saved
+
+    @router.post("/finding-rules/reset")
+    def reset_rules() -> list[dict]:
+        state.audit(cfg, "ui", "finding_rules.reset")
+        return rules.reset()
 
     @router.get("/run/{opportunity_id}/report.docx")
     def report_docx(opportunity_id: str) -> Response:

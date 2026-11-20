@@ -17,7 +17,7 @@ const VERDICT_NOTE = {
   not_ready: 'It should not become a project until the blockers are resolved.',
 };
 
-const NAV = [['#/', 'Opportunities'], ['#/checklist', 'Checklist'], ['#/jobs', 'Jobs']];
+const NAV = [['#/', 'Opportunities'], ['#/checklist', 'Checklist'], ['#/rules', 'Gap rules'], ['#/jobs', 'Jobs']];
 $('#mainNav').innerHTML = NAV.map(([h, n]) => `<a href="${h}" data-nav="${h}">${n}</a>`).join('');
 
 // One sign-in for every VeraForge page: Vera owns the PIN and the key is shared on this origin.
@@ -135,6 +135,53 @@ function factList(rows) {
     ${f.quote ? `<div class="small muted">"${esc(f.quote)}"</div>` : ''}</div>`).join('');
 }
 
+const SEV_ORDER = { high: 0, medium: 1, low: 2 };
+const DEST = { starting_risk: 'starting risk', starting_issue: 'starting issue', open_question: 'open question' };
+
+function findingCard(f) {
+  return `<div class="card finding ${esc(f.severity)}" style="margin-bottom:10px">
+    <div class="row"><b>${esc(f.id)}</b> ${pill(f.severity)}
+      <span class="tag">${esc(label(f.category))}</span>
+      <span class="tag ${f.basis === 'inferred' ? 'inferred' : ''}">${esc(f.basis)}</span>
+      <span class="muted small">${esc(f.origin)}${f.evidence_kind === 'absence' ? ', absence' : ''}</span></div>
+    <div style="margin:6px 0"><b>${esc(f.title)}</b></div>
+    <div class="src">${esc(f.doc)}, ${esc(f.where)}: "${esc(f.quote)}"</div>
+    <div class="small">${esc(f.why)}</div>
+    <div class="small muted">Ask the ${esc(f.asked_of)}: ${esc(f.question)} Goes to: ${esc(DEST[f.destination] || f.destination)}.</div></div>`;
+}
+
+function findingsHtml(run) {
+  const fd = run.findings;
+  if (!fd) return '';
+  const set = fd.unsupported || [];
+  return `<div class="card" id="findCard"><h2>Risks and gaps for project initiation</h2>
+    <p class="muted small">Each finding quotes the document and the quote was checked against it. Stated findings are in the document; inferred ones are Indy reading between the lines and never change the verdict. These become the starting risks, issues and open questions for Project Initiation.</p>
+    <div class="filters">
+      <label>Severity <select id="fSev"><option value="">All</option><option>high</option><option>medium</option><option>low</option></select></label>
+      <label>Basis <select id="fBasis"><option value="">Stated and inferred</option><option>stated</option><option>inferred</option></select></label>
+      <label>Sort by <select id="fSort"><option value="severity">Severity</option><option value="category">Category</option><option value="id">Id</option></select></label>
+      <span id="fCount" class="muted small"></span></div>
+    <div id="findList"></div>
+    ${set.length ? `<details style="margin-top:10px"><summary class="small">Set aside, not passed on: the model's quote was not found in the document (${set.length})</summary>
+      ${set.map((u) => `<div class="small muted">${esc(u.title)}: ${esc(u.reason)}</div>`).join('')}</details>` : ''}</div>`;
+}
+
+function drawFindings(run) {
+  const fd = run.findings;
+  if (!fd || !$('#findList')) return;
+  const draw = () => {
+    const sev = $('#fSev').value, basis = $('#fBasis').value, sort = $('#fSort').value;
+    const rows = fd.items.filter((f) => (!sev || f.severity === sev) && (!basis || f.basis === basis));
+    rows.sort((a, b) => (sort === 'category' ? a.category.localeCompare(b.category) || SEV_ORDER[a.severity] - SEV_ORDER[b.severity]
+      : sort === 'id' ? a.id.localeCompare(b.id)
+        : SEV_ORDER[a.severity] - SEV_ORDER[b.severity] || (a.basis === 'stated' ? 0 : 1) - (b.basis === 'stated' ? 0 : 1)));
+    $('#findList').innerHTML = rows.map(findingCard).join('') || '<div class="muted small">No findings match.</div>';
+    $('#fCount').textContent = rows.length + ' of ' + fd.items.length;
+  };
+  ['#fSev', '#fBasis', '#fSort'].forEach((s) => { $(s).onchange = draw; });
+  draw();
+}
+
 function reportHtml(run) {
   const c = run.check;
   const items = c.items;
@@ -151,7 +198,8 @@ function reportHtml(run) {
   return `
     <div class="verdict ${esc(run.verdict)}"><div><div class="big">${esc(VERDICT[run.verdict])}</div>
       <div>${esc(VERDICT_NOTE[run.verdict])}</div>
-      <div class="small muted">Checked ${esc(c.checked_on)}. Computed in code from the documents.</div></div></div>
+      <div class="small muted">Checked ${esc(c.checked_on)}. Computed in code from the documents.</div>
+      ${(c.verdict_reasons || []).length ? `<div class="small">Stated findings moved the verdict from ${esc(VERDICT[c.checklist_verdict])}: ${esc(c.verdict_reasons.join(', '))}.</div>` : ''}</div></div>
     ${run.model_problems.length ? `<div class="banner">The model stages did not fully run. The checklist and verdict are complete. ${esc(run.model_problems.join('; '))}</div>` : ''}
     <div class="card"><h2>Executive summary</h2>
       <p>${c.sow ? `SOW checked: <b>${esc(c.sow.filename)}</b>. ${esc(c.signature ? c.signature.detail : '')}` : 'No SOW was found.'}</p>
@@ -160,6 +208,7 @@ function reportHtml(run) {
       ${!blockers.length && !conditions.length ? '<p>Every enabled checklist item is present.</p>' : ''}
       <div class="row"><button class="action secondary small" id="dlReport">Download report (.md)</button>
       <button class="action secondary small" id="dlWord">Download Word</button>
+      <button class="action secondary small" id="dlHandoff">Download handoff (.json)</button>
       <span class="muted small">Stored in Vera as ${esc((run.stored || {}).storage_ref || 'the opportunity outputs')}</span></div></div>
     <div class="card"><h2>Checklist</h2><div class="tablewrap"><table>
       <thead><tr><th>Item</th><th>Kind</th><th>Status</th><th>What the documents show</th></tr></thead><tbody>
@@ -168,6 +217,7 @@ function reportHtml(run) {
         ${i.notes.map((n) => `<div class="small muted">${esc(n)}</div>`).join('')}
         ${i.evidence.slice(0, 2).map((e) => `<div class="src">${esc(e.doc)}, ${esc(e.where)}: "${esc(e.quote)}"</div>`).join('')}</td></tr>`).join('')}
       </tbody></table></div></div>
+    ${findingsHtml(run)}
     <div class="card"><h2>Documents</h2>
       ${c.documents.read.map((d) => `<div class="small">${esc(d.filename)} <span class="muted">(${esc(d.category)})</span></div>`).join('') || '<div class="muted small">None read.</div>'}
       ${c.documents.skipped.length ? `<h3 style="margin-top:12px">Not read, so nothing relies on them</h3>${c.documents.skipped.map((s) => `<div class="small">${esc(s.filename)}: ${esc(s.reason)}</div>`).join('')}` : ''}</div>
@@ -199,12 +249,14 @@ async function opportunity(oid) {
       <div class="row" style="margin-top:8px"><button class="action" type="submit" id="askBtn">Ask</button>
       <span class="muted small">Answers cite the document they came from.</span></div></form>
       <div id="answers"></div></div>`;
-  const wireDownloads = () => {
-    const md = $('#dlReport'), wd = $('#dlWord');
+  const wireDownloads = (run) => {
+    const md = $('#dlReport'), wd = $('#dlWord'), hj = $('#dlHandoff');
     if (md) md.onclick = () => download('run/' + enc(oid) + '/report.md', 'readiness_report_' + oid + '.md');
     if (wd) wd.onclick = () => download('run/' + enc(oid) + '/report.docx', 'readiness_report_' + oid + '.docx');
+    if (hj) hj.onclick = () => download('run/' + enc(oid) + '/handoff.json', 'indy_handoff.json');
+    if (run) drawFindings(run);
   };
-  wireDownloads();
+  wireDownloads(d.run);
 
   $('#runBtn').onclick = async () => {
     const btn = $('#runBtn'), msg = $('#runMsg');
@@ -216,7 +268,7 @@ async function opportunity(oid) {
       msg.innerHTML = '';
       const run = await api('run/' + enc(oid));
       $('#report').innerHTML = reportHtml(run);
-      wireDownloads();
+      wireDownloads(run);
       toast('Check finished');
     } catch (e) {
       msg.innerHTML = `<div class="banner bad">${esc(e.message)}</div>`;
@@ -289,6 +341,51 @@ async function checklist() {
   draw();
 }
 
+const CATS = ['ambiguity', 'acceptance', 'complexity', 'scope_boundary', 'assumptions_dependencies', 'commercial_timeline'];
+
+async function gapRules() {
+  view.innerHTML = '<p class="muted">Loading...</p>';
+  let items = await api('finding-rules');
+  const draw = () => {
+    view.innerHTML = `
+      <div class="page-title"><h2>Scope-risk rules</h2></div>
+      <p class="muted">Phrases Indy looks for in the SOW. Each hit becomes a finding that quotes the sentence. A * stands for any one word. A stated high finding turns a Ready verdict into Ready with conditions; the effect per severity is set in config.yaml.</p>
+      <div class="card"><div class="tablewrap"><table><thead><tr><th>On</th><th>Rule</th><th>Severity</th><th>Phrases, one per line</th><th></th></tr></thead><tbody>
+      ${items.map((r, n) => `<tr><td><input type="checkbox" data-on="${n}" ${r.enabled ? 'checked' : ''}></td>
+        <td>${esc(r.label)}<div class="small muted">${esc(label(r.category))}</div></td>
+        <td><select data-sev="${n}">${['high', 'medium', 'low'].map((s) => `<option ${r.severity === s ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
+        <td><textarea rows="3" data-ph="${n}">${esc(r.phrases.join('\n'))}</textarea></td>
+        <td>${r.custom ? `<button class="action secondary small" data-del="${n}">Remove</button>` : ''}</td></tr>`).join('')}
+      </tbody></table></div></div>
+      <div class="card"><h2>Add a rule</h2><div class="row">
+        <input id="newLabel" placeholder="Name of the rule" style="max-width:260px">
+        <select id="newCat" style="width:auto">${CATS.map((c) => `<option value="${c}">${esc(label(c))}</option>`).join('')}</select>
+        <select id="newSev" style="width:auto"><option>medium</option><option>high</option><option>low</option></select></div>
+        <label>Phrases, one per line<textarea id="newPh" rows="3"></textarea></label>
+        <button class="action secondary" id="addBtn">Add</button></div>
+      <div class="row"><button class="action" id="saveBtn">Save rules</button>
+      <button class="action secondary" id="resetBtn">Reset to defaults</button><span id="ruleMsg" class="muted small"></span></div>`;
+    view.querySelectorAll('[data-on]').forEach((el) => { el.onchange = () => { items[el.dataset.on].enabled = el.checked; }; });
+    view.querySelectorAll('[data-sev]').forEach((el) => { el.onchange = () => { items[el.dataset.sev].severity = el.value; }; });
+    view.querySelectorAll('[data-ph]').forEach((el) => {
+      el.onchange = () => { items[el.dataset.ph].phrases = el.value.split('\n').map((x) => x.trim()).filter(Boolean); };
+    });
+    view.querySelectorAll('[data-del]').forEach((el) => { el.onclick = () => { items.splice(+el.dataset.del, 1); draw(); }; });
+    $('#addBtn').onclick = () => {
+      const l = $('#newLabel').value.trim(), ph = $('#newPh').value.split('\n').map((x) => x.trim()).filter(Boolean);
+      if (!l || !ph.length) { toast('Give the rule a name and at least one phrase', true); return; }
+      items.push({ custom: true, label: l, category: $('#newCat').value, severity: $('#newSev').value, phrases: ph, enabled: true });
+      draw();
+    };
+    $('#saveBtn').onclick = async () => {
+      try { items = await api('finding-rules', { method: 'PUT', body: { items } }); toast('Rules saved'); draw(); }
+      catch (e) { $('#ruleMsg').textContent = e.message; toast(e.message, true); }
+    };
+    $('#resetBtn').onclick = async () => { items = await api('finding-rules/reset', { method: 'POST' }); toast('Reset to defaults'); draw(); };
+  };
+  draw();
+}
+
 async function jobs() {
   view.innerHTML = '<p class="muted">Loading...</p>';
   const list = await api('jobs');
@@ -306,6 +403,7 @@ async function route() {
   try {
     if (hash.startsWith('#/opp/')) await opportunity(decodeURIComponent(hash.slice(6)));
     else if (hash === '#/checklist') await checklist();
+    else if (hash === '#/rules') await gapRules();
     else if (hash === '#/jobs') await jobs();
     else await opportunities();
   } catch (e) {

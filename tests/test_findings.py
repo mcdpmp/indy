@@ -509,3 +509,10 @@ def test_llm_error_type_is_what_the_review_catches():
             raise LLMError("x")
 
     assert F.propose(Boom(), SOW, [])["problems"]
+
+
+def test_a_set_aside_proposal_is_listed_once_even_when_every_group_returns_it():
+    llm = FakeLLM()
+    llm.review_reply = {"findings": [proposal(quote="a sentence that is nowhere in this document")]}
+    got = F.propose(llm, SOW, [RFP])
+    assert len(llm.prompts) == 3 and len(got["unsupported"]) == 1
