@@ -21,3 +21,10 @@ readiness:
   partial_min_share: 0.5   # share of deliverables with acceptance criteria below which the item counts as missing
   min_assumptions: 5       # fewer assumptions than this is a partial result
   min_section_words: 40    # a section shorter than this is too thin to count as covering a topic
+
+findings:
+  # What a STATED finding of each severity does to the verdict: none, conditions or not_ready.
+  # Inferred findings never change the verdict.
+  verdict_effect: {high: conditions, medium: none, low: none}
+  max_per_rule: 3          # hits listed per phrase rule, so one repeated phrase does not flood the report
+  max_model_findings: 12   # most findings kept from the model's proposals

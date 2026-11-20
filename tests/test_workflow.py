@@ -154,3 +154,68 @@ def test_a_second_check_for_the_same_opportunity_is_refused_while_one_runs(cfg):
     assert first.status_code == 202 and second.status_code == 409
     assert c.get("/health").json()["busy"] is True
     gate.set()
+
+
+def _proposal(quote: str, **over) -> dict:
+    return {
+        "title": "Volume is not stated",
+        "category": "complexity",
+        "severity": "medium",
+        "basis": "inferred",
+        "quote": quote,
+        "where": "Scope",
+        "why": "Volume drives effort.",
+        "question": "How many records?",
+        "asked_of": "customer",
+        "destination": "open_question",
+        **over,
+    }
+
+
+def test_findings_reach_the_report_the_run_and_the_verdict_and_unsupported_stay_out(cfg):
+    vera = FakeVera()
+    vera.add("d-sow", "signed_sow.md", "sow", sow_text("06_middling").encode())
+    llm = FakeLLM()
+    llm.review_reply = {
+        "findings": [
+            _proposal("The price is inclusive of all revisions requested", basis="stated"),
+            _proposal("a sentence the model made up entirely"),
+        ]
+    }
+    c, _ = _run(cfg, vera, llm)
+    run = c.get("/v1/runs/OPP-1", headers=H).json()
+    items = run["findings"]["items"]
+    assert any(f["origin"] == "model" for f in items) and any(f["origin"] == "code" for f in items)
+    assert run["findings"]["unsupported"][0]["reason"]
+    md = vera.outputs["readiness_report.md"].decode()
+    assert "## Risks and gaps for project initiation" in md
+    assert "### Stated in the documents" in md and "### Inferred by Indy" in md
+    assert "made up entirely" not in md
+    assert run["check"]["checklist_verdict"] == "ready_with_conditions"
+
+
+def test_a_stated_high_finding_moves_a_clean_checklist_to_conditions(cfg):
+    text = (
+        sow_text("03_good")
+        + "\n\n## Support\n\nWe provide 24x7 support for the life of the system.\n"
+    )
+    vera = FakeVera()
+    vera.add("d-sow", "signed_sow.md", "sow", text.encode())
+    c, job = _run(cfg, vera)
+    run = c.get("/v1/runs/OPP-1", headers=H).json()
+    assert job["result"]["verdict"] == "ready_with_conditions"
+    assert run["check"]["checklist_verdict"] == "ready" and run["check"]["verdict_reasons"]
+    assert (
+        "moved the verdict from Ready to Ready with conditions"
+        in vera.outputs["readiness_report.md"].decode()
+    )
+
+
+def test_model_outage_keeps_code_findings_and_names_the_gap_review_in_the_banner(cfg):
+    vera = FakeVera()
+    vera.add("d-sow", "signed_sow.md", "sow", sow_text("08_poor").encode())
+    c, job = _run(cfg, vera, FakeLLM(down=True))
+    run = c.get("/v1/runs/OPP-1", headers=H).json()
+    assert job["status"] == "done" and run["findings"]["items"]
+    assert any("gap review" in p for p in run["model_problems"])
+    assert "did not fully run" in vera.outputs["readiness_report.md"].decode()

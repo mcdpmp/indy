@@ -35,6 +35,20 @@ DEFAULTS: dict = {
         "min_assumptions": 5,
         "min_section_words": 40,
     },
+    "findings": {
+        # what a STATED finding of each severity does to the verdict: none, conditions or not_ready.
+        # Inferred findings never change the verdict, because nothing in a document backs them.
+        "verdict_effect": {"high": "conditions", "medium": "none", "low": "none"},
+        # severity of the finding made when a checklist item is partial or missing
+        "gap_severity": {
+            "change_control": {"missing": "high", "partial": "medium"},
+            "assumptions": {"missing": "high", "partial": "medium"},
+            "dependencies": {"missing": "medium", "partial": "low"},
+            "security_compliance": {"missing": "medium", "partial": "low"},
+        },
+        "max_per_rule": 3,
+        "max_model_findings": 12,
+    },
     "paths": {"state_dir": "./state"},
 }
 
@@ -61,6 +75,22 @@ def validate(cfg: dict) -> None:
     for key in ("min_assumptions", "min_section_words"):
         if not isinstance(r[key], int) or r[key] < 1:
             raise ValueError(f"readiness.{key} must be a whole number of at least 1")
+    f = cfg["findings"]
+    for sev, effect in f["verdict_effect"].items():
+        if sev not in ("high", "medium", "low") or effect not in (
+            "none",
+            "conditions",
+            "not_ready",
+        ):
+            raise ValueError(
+                "findings.verdict_effect maps high, medium, low to none, conditions or not_ready"
+            )
+    for key in ("max_per_rule", "max_model_findings"):
+        if not isinstance(f[key], int) or f[key] < 1:
+            raise ValueError(f"findings.{key} must be a whole number of at least 1")
+    for item, levels in f["gap_severity"].items():
+        if any(v not in ("high", "medium", "low") for v in levels.values()):
+            raise ValueError(f"findings.gap_severity.{item} must use high, medium or low")
     if not isinstance(llm["pause_seconds"], int | float) or llm["pause_seconds"] < 0:
         raise ValueError("llm.pause_seconds must be zero or more")
 

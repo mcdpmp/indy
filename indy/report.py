@@ -44,6 +44,43 @@ def _fact_line(f: dict) -> str:
     return f"- {f['text']} [{tag}]"
 
 
+def findings_section(findings: dict | None) -> list[str]:
+    """Stated and inferred findings are listed apart so nobody reads a guess as a clause."""
+    if not findings:
+        return []
+    out = ["", "## Risks and gaps for project initiation", ""]
+    out.append(
+        "Findings from reading the SOW. Each quotes the document and the quote was checked against it. "
+        "These become the starting risks, issues and open questions for Project Initiation."
+    )
+    for basis, title in (
+        ("stated", "Stated in the documents"),
+        ("inferred", "Inferred by Indy (reading between the lines, no effect on the verdict)"),
+    ):
+        rows = [f for f in findings["items"] if f["basis"] == basis]
+        out += ["", f"### {title}", ""]
+        if not rows:
+            out.append("None.")
+            continue
+        out += [
+            "| Id | Severity | Category | Finding | Ask | Goes to |",
+            "|---|---|---|---|---|---|",
+        ]
+        for f in rows:
+            out.append(
+                f"| {f['id']} | {f['severity']} | {_cell(f['category'])} | {_cell(f['title'])} | "
+                f"{f['asked_of']} | {_cell(f['destination'])} |"
+            )
+        for f in rows:
+            out += [
+                "",
+                f"**{f['id']}** ({f['severity']}, {_cell(f['category'])}): {_cell(f['why'])}",
+                f'- Quote ({f["doc"]}, {_cell(f["where"])}): "{_cell(f["quote"])}"',
+                f"- Question for the {f['asked_of']}: {_cell(f['question'])}",
+            ]
+    return out
+
+
 def render(
     opportunity: dict,
     check: dict,
@@ -51,6 +88,7 @@ def render(
     methodology: dict | None,
     inferred: dict | None,
     model_problems: list[str],
+    findings: dict | None = None,
 ) -> str:
     name = (
         opportunity.get("name") or opportunity.get("title") or opportunity.get("opportunity_id", "")
@@ -69,6 +107,14 @@ def render(
     lines.append(
         f"Checked on {check['checked_on']} by Indy {VERSION}. The verdict and every status below are computed in code from the documents. Indy does not create projects or choose a methodology."
     )
+    if check.get("verdict_reasons"):
+        lines += [
+            "",
+            "Stated findings moved the verdict from "
+            + f"{VERDICT_TEXT[check['checklist_verdict']]} to {VERDICT_TEXT[verdict]}: "
+            + ", ".join(check["verdict_reasons"])
+            + ".",
+        ]
     if model_problems:
         lines += [
             "",
@@ -113,6 +159,7 @@ def render(
         extra += [f'- {e["doc"]}, {e["where"]}: "{_cell(e["quote"])}"' for e in i["evidence"][:3]]
         if extra:
             lines += ["", f"### {i['label']}", *extra]
+    lines += findings_section(findings)
     docs = check["documents"]
     lines += ["", "## Documents", "", "Read:"]
     lines += [f"- {d['filename']} ({d['category']})" for d in docs["read"]] or ["- none"]

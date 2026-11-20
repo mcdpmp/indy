@@ -157,6 +157,8 @@ class FakeLLM:
                 ]
                 for f in fields
             }
+        if "TASK: review a signed SOW for scope risk" in prompt:
+            return getattr(self, "review_reply", {"findings": []})
         if "TASK: suggest a delivery methodology" in prompt:
             return {"suggestion": "waterfall", "reasoning": "Fixed price with milestones."}
         return {
